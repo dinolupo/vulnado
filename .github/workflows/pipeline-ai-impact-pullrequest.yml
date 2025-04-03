@@ -18,7 +18,7 @@ jobs:
 
       - name: Authenticate with Keycloak
         id: keycloak_auth
-        shell: '"C:\Program Files\Git\bin\bash.exe" -e'  # <= QUOTED path
+        shell: '"C:\Program Files\Git\git-bash.exe" -e'  # <= QUOTED path
         run: |
           TOKEN_RESPONSE=$(curl -s -X POST 'http://auth.gftaiimpact.local/realms/ai-impact/protocol/openid-connect/token' \
             -H 'Content-Type: application/x-www-form-urlencoded' \
@@ -40,7 +40,7 @@ jobs:
 
       - name: Trigger Code Review API
         id: send_code_review
-        shell: '"C:\Program Files\Git\bin\bash.exe" -e'  # <= QUOTED path
+        shell: '"C:\Program Files\Git\git-bash.exe" -e'  # <= QUOTED path
         run: |
           echo "Repositório: ${{github.repository}}"
           RESPONSE=$(curl --location 'http://api.gftaiimpact.local/ai/review' \
@@ -59,7 +59,7 @@ jobs:
 
       - name: Monitor Code Review Job Status
         id: monitor_code_review_status
-        shell: '"C:\Program Files\Git\bin\bash.exe" -e'  # <= QUOTED path
+        shell: '"C:\Program Files\Git\git-bash.exe" -e'  # <= QUOTED path
         run: |
           JOB_ID=${{ env.job_id }}
           STATUS="Pending"

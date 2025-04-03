@@ -19,7 +19,7 @@ jobs:
 
       - name: Authenticate with Keycloak
         id: keycloak_auth
-        shell: '"C:\Program Files\Git\bin\bash.exe" -e'  # <= QUOTED path
+        shell: '"C:\Program Files\Git\git-bash.exe" -e'  # <= QUOTED path
         run: |
           TOKEN_RESPONSE=$(curl -s -X POST 'http://auth.gftaiimpact.local/realms/ai-impact/protocol/openid-connect/token' \
             -H 'Content-Type: application/x-www-form-urlencoded' \
@@ -40,7 +40,7 @@ jobs:
           echo "access_token=$ACCESS_TOKEN" >> $GITHUB_ENV
 
       - name: Checkout the branch
-        shell: '"C:\Program Files\Git\bin\bash.exe" -e'  # <= QUOTED path
+        shell: '"C:\Program Files\Git\git-bash.exe" -e'  # <= QUOTED path
         run: |
           BRANCH_NAME=${{ github.event.pull_request.head.ref }}
           git fetch origin $BRANCH_NAME:$BRANCH_NAME
@@ -59,7 +59,7 @@ jobs:
           #   echo "$JAVA_FILES"
           #   echo "EOF"
           # } >> "$GITHUB_ENV"
-        shell: '"C:\Program Files\Git\bin\bash.exe" -e'  # <= QUOTED path
+        shell: '"C:\Program Files\Git\git-bash.exe" -e'  # <= QUOTED path
         run: |
           java_files=$(find "src/main/java/com/scalesec/vulnado" -type f -name "*.java")
           JAVA_FILES=()
@@ -78,7 +78,7 @@ jobs:
 
       - name: Prepare and Send to API (TestCreator)
         id: send_api
-        shell: '"C:\Program Files\Git\bin\bash.exe" -e'  # <= QUOTED path
+        shell: '"C:\Program Files\Git\git-bash.exe" -e'  # <= QUOTED path
         run: |
           FILES_ARRAY=()
           while IFS= read -r FILE; do
@@ -110,7 +110,7 @@ jobs:
 
       - name: Monitor Job Status
         id: monitor_status
-        shell: '"C:\Program Files\Git\bin\bash.exe" -e'  # <= QUOTED path
+        shell: '"C:\Program Files\Git\git-bash.exe" -e'  # <= QUOTED path
         run: |
           JOB_ID=${{ env.job_id }}
           STATUS="Pending"
@@ -133,7 +133,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Save Generated Tests
-        shell: '"C:\Program Files\Git\bin\bash.exe" -e'  # <= QUOTED path
+        shell: '"C:\Program Files\Git\git-bash.exe" -e'  # <= QUOTED path
         run: |
           OUTPUT_URIS="${{ env.output_uris }}"
 
@@ -160,7 +160,7 @@ jobs:
 
       - name: Prepare and Send to API (DocCreator)
         id: send_api2
-        shell: '"C:\Program Files\Git\bin\bash.exe" -e'  # <= QUOTED path
+        shell: '"C:\Program Files\Git\git-bash.exe" -e'  # <= QUOTED path
         run: |
 
           FILES_ARRAY=()
@@ -188,7 +188,7 @@ jobs:
 
       - name: Monitor Job Status
         id: monitor_status2
-        shell: '"C:\Program Files\Git\bin\bash.exe" -e'  # <= QUOTED path
+        shell: '"C:\Program Files\Git\git-bash.exe" -e'  # <= QUOTED path
         run: |
           JOB_ID=${{ env.job_id }}
           STATUS="Pending"
@@ -211,7 +211,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Save Generated Docs
-        shell: '"C:\Program Files\Git\bin\bash.exe" -e'  # <= QUOTED path
+        shell: '"C:\Program Files\Git\git-bash.exe" -e'  # <= QUOTED path
         run: |
 
           OUTPUT_URIS="${{ env.output_uris }}"
@@ -237,7 +237,7 @@ jobs:
 #               https://api.github.com/repos/$REPO/issues/$ISSUE_NUMBER/comments
 
       - name: Commit and Push Documenter and Tests
-        shell: '"C:\Program Files\Git\bin\bash.exe" -e'  # <= QUOTED path
+        shell: '"C:\Program Files\Git\git-bash.exe" -e'  # <= QUOTED path
         run: |
           git config --global user.name 'gft-ai-impact[bot]'
           git config --global user.email 'ai-impact[bot]@gft.com'
@@ -264,7 +264,7 @@ jobs:
           #            --form 'PullRequestId="${{ github.event.pull_request.number }}"' \
       - name: Prepare and Send for Code Review
         id: send_code_review
-        shell: '"C:\Program Files\Git\bin\bash.exe" -e'  # <= QUOTED path
+        shell: '"C:\Program Files\Git\git-bash.exe" -e'  # <= QUOTED path
         run: |
           echo "Repositório: ${{github.repository}}"
           RESPONSE=$(curl --location 'http://api.gftaiimpact.local/ai/review' \
@@ -283,7 +283,7 @@ jobs:
 
       - name: Monitor Code Review Job Status
         id: monitor_code_review_status
-        shell: '"C:\Program Files\Git\bin\bash.exe" -e'  # <= QUOTED path
+        shell: '"C:\Program Files\Git\git-bash.exe" -e'  # <= QUOTED path
         run: |
           JOB_ID=${{ env.job_id }}
           STATUS="Pending"
@@ -307,7 +307,7 @@ jobs:
 
       - name: Prepare and Send for Code Fix
         id: monitor_code_fix_status
-        shell: '"C:\Program Files\Git\bin\bash.exe" -e'  # <= QUOTED path
+        shell: '"C:\Program Files\Git\git-bash.exe" -e'  # <= QUOTED path
         run: |
 
           RESPONSE=$(curl --location 'http://api.gftaiimpact.local/ai/fix' \
@@ -345,7 +345,7 @@ jobs:
 
       - name: Monitor Fixer Job Status
         id: monitor_status3
-        shell: '"C:\Program Files\Git\bin\bash.exe" -e'  # <= QUOTED path
+        shell: '"C:\Program Files\Git\git-bash.exe" -e'  # <= QUOTED path
         run: |
           JOB_ID=${{ env.job_id }}
           STATUS="Pending"
