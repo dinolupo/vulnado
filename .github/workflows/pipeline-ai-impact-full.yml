@@ -14,9 +14,6 @@ permissions:
 jobs:
   generate_tests:
     runs-on: self-hosted
-    defaults:
-      run:
-        shell: pwsh
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
@@ -41,13 +38,15 @@ jobs:
 
           if (-not $accessToken -or $accessToken -eq "null") {
             Write-Host "Failed to obtain access token"
-            $response | ConvertTo-Json -Depth 10 | Write-Host
+            Write-Host ($response | ConvertTo-Json -Depth 10)
             exit 1
           }
 
-          "access_token=$accessToken" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "Access token retrieved"
+          "access_token=$accessToken" >> $env:GITHUB_ENV
 
       - name: Checkout the branch
+        shell: powershell
         run: |
           $branchName = "${{ github.event.pull_request.head.ref }}"
           git fetch origin $branchName
@@ -55,63 +54,49 @@ jobs:
 
       - name: Create Classes List
         id: changes
+        shell: powershell
         run: |
           $javaFiles = Get-ChildItem -Path "src/main/java/com/scalesec/vulnado" -Recurse -Filter "*.java" | ForEach-Object { $_.FullName }
           $javaFilesString = $javaFiles -join "`n"
+
           Write-Host "Java files found:`n$javaFilesString"
 
-          "java_files=$javaFilesString" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Add-Content -Path $env:GITHUB_ENV -Value "java_files<<EOF`n$javaFilesString`nEOF"
 
       - name: Prepare and Send to API (TestCreator)
         id: send_api
+        shell: powershell
         run: |
-          $javaFilesRaw = (Get-Content -Path $env:GITHUB_ENV | Where-Object { $_ -like "java_files=*" }) -replace "java_files=", ""
-          $javaFiles = $javaFilesRaw -split "`n"
+          $filesArray = @()
 
-          $filesForm = @{}
-          $i = 0
+          foreach ($file in (Get-Content "$env:GITHUB_ENV" | Select-String "java_files" -Context 0,1).Context.PostContext) {
+              $className = [System.IO.Path]::GetFileNameWithoutExtension($file)
+              $testFile = "src/test/java/com/scalesec/vulnado/${className}Tests.java"
 
-          foreach ($file in $javaFiles) {
-            $className = [System.IO.Path]::GetFileNameWithoutExtension($file)
-            $filesForm["files[$i]"] = Get-Item $file
-            $testPath = "src/test/java/com/scalesec/vulnado/${className}Tests.java"
-            if (Test-Path $testPath) {
-              $filesForm["ExistingTests[$i]"] = Get-Item $testPath
-            }
-            $i++
+              $filesArray += "--form files=@$file"
+
+              if (Test-Path $testFile) {
+                  $filesArray += "--form ExistingTests=@$testFile"
+              }
           }
 
-          $response = Invoke-RestMethod -Uri "http://api.gftaiimpact.local/ai/test" -Method Post -Headers @{
-            Authorization = "Bearer $env:access_token"
-          } -FormData $filesForm -Body @{
-            RunName = "GenerateTests"
-            jobName = "DemoTestCreator"
-            SearchPattern = "*.java"
-            TargetExtension = "java"
-            PromptId = "TestCreator__CreateUnitTests_V1"
-            SourceCodeLanguage = "Java"
-            TestType = "Unit"
-            TestingFrameworks = "MSTEST,MOQ"
-            Llm = "${{ vars.LLM }}"
-            AdditionalInstructions = "Generate only the source code, without any extra information"
+          $response = Invoke-RestMethod -Uri "http://api.gftaiimpact.local/ai/test" -Method Post -Headers @{ "Authorization" = "Bearer $env:access_token" } -Body @{
+              RunName             = "GenerateTests"
+              jobName             = "DemoTestCreator"
+              SearchPattern       = "*.java"
+              TargetExtension     = "java"
+              PromptId            = "TestCreator__CreateUnitTests_V1"
+              SourceCodeLanguage  = "Java"
+              TestType            = "Unit"
+              TestingFrameworks   = "MSTEST,MOQ"
+              Llm                = "${{ vars.LLM }}"
+              AdditionalInstructions = "Generate only the source code, without any extra information"
           }
+
+          Write-Host "API Response: $response"
 
           $jobId = $response.jobId
-          if (-not $jobId) {
-            Write-Host "ERROR: Job ID was not returned"
-            exit 1
-          }
-
-          "job_id=$jobId" | Out-File -FilePath $env:GITHUB_ENV -Append
-
-      - name: Debug Job ID
-        run: |
-          Write-Host "Checking job ID:"
-          Write-Host "Job ID from env: $env:job_id"
-          if (-not $env:job_id) {
-            Write-Host "ERROR: job_id is empty!"
-            exit 1
-          }
+          Add-Content -Path $env:GITHUB_ENV -Value "job_id=$jobId"
 
       - name: Monitor Job Status
         id: monitor_status
