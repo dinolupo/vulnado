@@ -2,8 +2,6 @@ name: AI Impact Full Pipeline
 
 on:
   workflow_dispatch:
-  # pull_request:
-  #   types: [opened, synchronize]
 
 permissions:
   contents: write
@@ -15,16 +13,13 @@ jobs:
   generate_tests:
     runs-on: self-hosted
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Authenticate with Keycloak
         id: keycloak_auth
+        shell: powershell
         run: |
-          $headers = @{
-            "Content-Type" = "application/x-www-form-urlencoded"
-          }
-
+          $headers = @{ "Content-Type" = "application/x-www-form-urlencoded" }
           $body = @{
             client_id = "ai-impact-client"
             username = "administrator"
@@ -32,121 +27,78 @@ jobs:
             scope    = "openid"
             grant_type = "password"
           }
-
-          $response = Invoke-RestMethod -Method Post -Uri "http://auth.gftaiimpact.local/realms/ai-impact/protocol/openid-connect/token" -Headers $headers -Body $body
-          $accessToken = $response.access_token
-
-          if (-not $accessToken -or $accessToken -eq "null") {
-            Write-Host "Failed to obtain access token"
-            Write-Host ($response | ConvertTo-Json -Depth 10)
-            exit 1
-          }
-
-          Write-Host "Access token retrieved"
-          "access_token=$accessToken" >> $env:GITHUB_ENV
+          $response = Invoke-RestMethod -Uri "http://auth.gftaiimpact.local/realms/ai-impact/protocol/openid-connect/token" -Method Post -Headers $headers -Body $body
+          if (-not $response.access_token) { Write-Host "❌ Failed to obtain token"; exit 1 }
+          "access_token=$($response.access_token)" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Checkout the branch
         shell: powershell
         run: |
-          $branchName = "${{ github.event.pull_request.head.ref }}"
-          git fetch origin $branchName
-          git checkout $branchName
+          git fetch origin "${{ github.event.pull_request.head.ref }}"
+          git checkout "${{ github.event.pull_request.head.ref }}"
 
       - name: Create Classes List
         id: changes
         shell: powershell
         run: |
-          $javaFiles = Get-ChildItem -Path "src/main/java/com/scalesec/vulnado" -Recurse -Filter "*.java" | ForEach-Object { $_.FullName }
-          $javaFilesString = $javaFiles -join "`n"
-
-          Write-Host "Java files found:`n$javaFilesString"
-
-          Add-Content -Path $env:GITHUB_ENV -Value "java_files<<EOF`n$javaFilesString`nEOF"
+          $files = Get-ChildItem -Path "src/main/java/com/scalesec/vulnado" -Recurse -Filter "*.java" | ForEach-Object { $_.FullName }
+          if (-not $files) { Write-Host "No Java files found"; exit 1 }
+          "java_files<<EOF`n$($files -join "`n")`nEOF" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Prepare and Send to API (TestCreator)
         id: send_api
         shell: powershell
         run: |
-          $filesArray = @()
-
-          foreach ($file in (Get-Content "$env:GITHUB_ENV" | Select-String "java_files" -Context 0,1).Context.PostContext) {
+          $files = "${{ env.java_files }}" -split "`n"
+          $form = @{}
+          foreach ($file in $files) {
+            if (-not [string]::IsNullOrWhiteSpace($file)) {
               $className = [System.IO.Path]::GetFileNameWithoutExtension($file)
               $testFile = "src/test/java/com/scalesec/vulnado/${className}Tests.java"
-
-              $filesArray += "--form files=@$file"
-
-              if (Test-Path $testFile) {
-                  $filesArray += "--form ExistingTests=@$testFile"
-              }
+              $form.Add("files", Get-Item $file)
+              if (Test-Path $testFile) { $form.Add("ExistingTests", Get-Item $testFile) }
+            }
           }
-
-          Write-Host "Checking job status at URL: http://api.gftaiimpact.local/ai/jobs/$jobId/status"
-
-          $response = Invoke-RestMethod -Uri "http://api.gftaiimpact.local/ai/test" -Method Post -Headers @{ "Authorization" = "Bearer $env:access_token" } -Body @{
-              RunName             = "GenerateTests"
-              jobName             = "DemoTestCreator"
-              SearchPattern       = "*.java"
-              TargetExtension     = "java"
-              PromptId            = "TestCreator__CreateUnitTests_V1"
-              SourceCodeLanguage  = "Java"
-              TestType            = "Unit"
-              TestingFrameworks   = "MSTEST,MOQ"
-              Llm                = "${{ vars.LLM }}"
-              AdditionalInstructions = "Generate only the source code, without any extra information"
+          $response = Invoke-RestMethod -Uri "http://api.gftaiimpact.local/ai/test" -Method Post -Headers @{ Authorization = "Bearer $env:access_token" } -Form $form + @{
+            RunName = "GenerateTests"; jobName = "DemoTestCreator"
+            SearchPattern = "*.java"; TargetExtension = "java"
+            PromptId = "TestCreator__CreateUnitTests_V1"
+            SourceCodeLanguage = "Java"; TestType = "Unit"
+            TestingFrameworks = "MSTEST,MOQ"
+            Llm = "${{ vars.LLM }}"
+            AdditionalInstructions = "Generate only the source code, without any extra information"
           }
-
-          # Write-Host "API Response: $response"
-          Write-Host "Response from /ai/test:"
-          Write-Host ($response | ConvertTo-Json -Depth 10)
-
-          if (-not $response.jobId) {
-              Write-Host "jobId not found in response!"
-              exit 1
-          }
-
-          $jobId = $response.jobId
-          Add-Content -Path $env:GITHUB_ENV -Value "job_id=$jobId"
+          "job_id=$($response.jobId)" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Monitor Job Status
         id: monitor_status
+        shell: powershell
         run: |
           $jobId = $env:job_id
           $status = "Pending"
-
-          while ($status -ne "Completed") {
+          do {
+            Start-Sleep -Seconds 10
             $response = Invoke-RestMethod -Uri "http://api.gftaiimpact.local/ai/jobs/$jobId/status" -Headers @{ Authorization = "Bearer $env:access_token" }
             $status = $response.status
-            Write-Host "Current status: $status"
-            Start-Sleep -Seconds 10
-          }
-
-          Write-Host "Final status: $status"
-
-          if ($response.outputUris) {
-            $outputUris = $response.outputUris -join "`n"
-            "output_uris=$outputUris" | Out-File -FilePath $env:GITHUB_ENV -Append
-          }
+            Write-Host "Status: $status"
+          } while ($status -ne "Completed")
+          $uris = $response.results.output.uri -join "`n"
+          "output_uris<<EOF`n$uris`nEOF" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Save Generated Tests
+        shell: powershell
         run: |
-          $outputUris = $env:output_uris -split "`n"
-
-          foreach ($uri in $outputUris) {
-            $fileUrl = "http://api.gftaiimpact.local$uri"
-            $fileContent = Invoke-RestMethod -Uri $fileUrl -Headers @{ Authorization = "Bearer $env:access_token" }
-
-            $className = [System.IO.Path]::GetFileNameWithoutExtension($uri)
-            $testFile = "src/test/java/com/scalesec/vulnado/${className}Tests.java"
-
-            $directory = [System.IO.Path]::GetDirectoryName($testFile)
-            if (!(Test-Path $directory)) {
-              New-Item -ItemType Directory -Path $directory -Force | Out-Null
-            }
-
-            $fileContent | Out-File -FilePath $testFile -Encoding utf8
+          $uris = "${{ env.output_uris }}" -split "`n"
+          foreach ($uri in $uris) {
+            $content = Invoke-RestMethod -Uri "http://api.gftaiimpact.local$uri" -Headers @{ Authorization = "Bearer $env:access_token" }
+            $name = [System.IO.Path]::GetFileNameWithoutExtension($uri)
+            $path = "src/test/java/com/scalesec/vulnado/${name}Tests.java"
+            New-Item -ItemType Directory -Path (Split-Path $path) -Force | Out-Null
+            $content | Out-File $path -Encoding utf8
           }
 
       - name: Commit and Push Generated Files
+        shell: powershell
         run: |
           git config --global user.name 'gft-ai-impact[bot]'
           git config --global user.email 'ai-impact[bot]@gft.com'
