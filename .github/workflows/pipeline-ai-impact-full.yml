@@ -18,30 +18,32 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Authenticate with Keycloak
+        - name: Authenticate with Keycloak
         id: keycloak_auth
-        shell: powershell
         run: |
-          $authUrl = "http://auth.gftaiimpact.local/realms/ai-impact/protocol/openid-connect/token"
-          $headers = @{ "Content-Type" = "application/x-www-form-urlencoded" }
+          $headers = @{
+            "Content-Type" = "application/x-www-form-urlencoded"
+          }
+
           $body = @{
-              client_id  = "ai-impact-client"
-              username   = "administrator"
-              password   = "Gft@2025"
-              scope      = "openid"
-              grant_type = "password"
+            client_id = "ai-impact-client"
+            username = "administrator"
+            password = "Gft@2025"
+            scope    = "openid"
+            grant_type = "password"
           }
 
-          $response = Invoke-RestMethod -Uri $authUrl -Method Post -Headers $headers -Body $body
-          $ACCESS_TOKEN = $response.access_token
+          $response = Invoke-RestMethod -Method Post -Uri "http://auth.gftaiimpact.local/realms/ai-impact/protocol/openid-connect/token" -Headers $headers -Body $body
+          $accessToken = $response.access_token
 
-          if (-not $ACCESS_TOKEN -or $ACCESS_TOKEN -eq "null") {
-              Write-Host "Failed to obtain access token"
-              Write-Host ($response | ConvertTo-Json -Depth 10)
-              exit 1
+          if (-not $accessToken -or $accessToken -eq "null") {
+            Write-Host "Failed to obtain access token"
+            Write-Host ($response | ConvertTo-Json -Depth 10)
+            exit 1
           }
 
-          "access_token=$ACCESS_TOKEN" | Out-File -FilePath $env:GITHUB_ENV -Append
+          Write-Host "Access token retrieved"
+          "access_token=$accessToken" >> $env:GITHUB_ENV
 
       - name: Checkout the branch
         shell: powershell
