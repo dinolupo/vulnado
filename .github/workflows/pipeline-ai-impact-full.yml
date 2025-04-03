@@ -18,7 +18,7 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-        - name: Authenticate with Keycloak
+      - name: Authenticate with Keycloak
         id: keycloak_auth
         run: |
           $headers = @{
