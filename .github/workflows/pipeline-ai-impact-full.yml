@@ -119,11 +119,18 @@ jobs:
         run: |
           $uris = "${{ env.output_uris }}" -split "`n"
           foreach ($uri in $uris) {
-            $content = Invoke-RestMethod -Uri "http://api.gftaiimpact.local$uri" -Headers @{ Authorization = "Bearer $env:access_token" }
-            $name = [System.IO.Path]::GetFileNameWithoutExtension([System.IO.Path]::GetFileName($uri))
-            $path = "src/test/java/com/scalesec/vulnado/${name}Tests.java"
-            New-Item -ItemType Directory -Path (Split-Path $path) -Force | Out-Null
-            $content | Out-File $path -Encoding utf8
+            if (-not [string]::IsNullOrWhiteSpace($uri)) {
+              $cleanUri = $uri.Trim()
+              $content = Invoke-RestMethod -Uri "http://api.gftaiimpact.local$cleanUri" -Headers @{ Authorization = "Bearer $env:access_token" }
+
+              $fileName = [System.IO.Path]::GetFileName($cleanUri)
+              $name = [System.IO.Path]::GetFileNameWithoutExtension($fileName)
+
+              $path = "src/test/java/com/scalesec/vulnado/${name}Tests.java"
+
+              New-Item -ItemType Directory -Path (Split-Path $path) -Force | Out-Null
+              $content | Out-File $path -Encoding utf8
+            }
           }
 
       - name: Commit and Push Generated Files
