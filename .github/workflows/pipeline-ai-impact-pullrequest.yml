@@ -23,7 +23,7 @@ jobs:
             -H 'Content-Type: application/x-www-form-urlencoded' \
             -d 'client_id=ai-impact-client' \
             -d "username=administrator" \
-            -d "password=Gft@202" \
+            -d "password=Gft@2025" \
             -d "scope=openid" \
             -d "grant_type=password")
 
@@ -40,16 +40,17 @@ jobs:
       - name: Trigger Code Review API
         id: send_code_review
         run: |
-          echo "Repositório: ${{github.repository}}"
+          echo "Repository: ${{github.repository}}"
           RESPONSE=$(curl --location 'http://api.gftaiimpact.local/ai/review' \
             --header "Authorization: Bearer ${{ env.access_token }}" \
             --form 'RunName="CodeReview"' \
+            --form 'jobName=DemoCodeReviewerGitHub' \
             --form 'PromptId="CodeReviewer__CodeReviewer_V1_Conventions"' \
             --form 'Llm="${{ vars.LLM }}"' \
             --form 'PullRequestId="${{ github.event.pull_request.number }}"' \
             --form 'RepoName="${{ github.repository }}"' \
             --form 'AdditionalInstructions=""' \
-            --form 'Conventions="Header,Description,Summary,Recomendations,VulnExplanation"') 
+            --form 'Conventions="Header,Description,Summary,Recomendations,VulnExplanation"')
           echo "API Response: $RESPONSE"
           JOB_ID=$(echo $RESPONSE)
           echo "job_id=$JOB_ID" >> $GITHUB_ENV
