@@ -45,30 +45,63 @@ jobs:
           if (-not $files) { Write-Host "No Java files found"; exit 1 }
           "java_files<<EOF`n$($files -join "`n")`nEOF" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: Prepare and Send to API (TestCreator)
-        id: send_api
-        shell: powershell
-        run: |
-          $files = "${{ env.java_files }}" -split "`n"
-          $form = @{}
-          foreach ($file in $files) {
-            if (-not [string]::IsNullOrWhiteSpace($file)) {
-              $className = [System.IO.Path]::GetFileNameWithoutExtension($file)
-              $testFile = "src/test/java/com/scalesec/vulnado/${className}Tests.java"
-              $form.Add("files", Get-Item $file)
-              if (Test-Path $testFile) { $form.Add("ExistingTests", Get-Item $testFile) }
+          - name: Prepare and Send to API (TestCreator)
+          id: send_api
+          shell: powershell
+          run: |
+            Add-Type -AssemblyName System.Net.Http
+
+            $httpClient = [System.Net.Http.HttpClient]::new()
+            $multipartContent = [System.Net.Http.MultipartFormDataContent]::new()
+
+            $javaFiles = "${{ env.java_files }}" -split "`n"
+
+            foreach ($file in $javaFiles) {
+              if (-not [string]::IsNullOrWhiteSpace($file)) {
+                $file = $file.Trim()
+                $className = [System.IO.Path]::GetFileNameWithoutExtension($file)
+                $testFile = "src/test/java/com/scalesec/vulnado/${className}Tests.java"
+
+                $fileStream = [System.IO.FileStream]::new($file, [System.IO.FileMode]::Open)
+                $fileContent = [System.Net.Http.StreamContent]::new($fileStream)
+                $multipartContent.Add($fileContent, "files", [System.IO.Path]::GetFileName($file))
+
+                if (Test-Path $testFile) {
+                  $testStream = [System.IO.FileStream]::new($testFile, [System.IO.FileMode]::Open)
+                  $testContent = [System.Net.Http.StreamContent]::new($testStream)
+                  $multipartContent.Add($testContent, "ExistingTests", [System.IO.Path]::GetFileName($testFile))
+                }
+              }
             }
-          }
-          $response = Invoke-RestMethod -Uri "http://api.gftaiimpact.local/ai/test" -Method Post -Headers @{ Authorization = "Bearer $env:access_token" } -Form $form + @{
-            RunName = "GenerateTests"; jobName = "DemoTestCreator"
-            SearchPattern = "*.java"; TargetExtension = "java"
-            PromptId = "TestCreator__CreateUnitTests_V1"
-            SourceCodeLanguage = "Java"; TestType = "Unit"
-            TestingFrameworks = "MSTEST,MOQ"
-            Llm = "${{ vars.LLM }}"
-            AdditionalInstructions = "Generate only the source code, without any extra information"
-          }
-          "job_id=$($response.jobId)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+            $multipartContent.Add([System.Net.Http.StringContent]::new("GenerateTests"), "RunName")
+            $multipartContent.Add([System.Net.Http.StringContent]::new("DemoTestCreator"), "jobName")
+            $multipartContent.Add([System.Net.Http.StringContent]::new("*.java"), "SearchPattern")
+            $multipartContent.Add([System.Net.Http.StringContent]::new("java"), "TargetExtension")
+            $multipartContent.Add([System.Net.Http.StringContent]::new("TestCreator__CreateUnitTests_V1"), "PromptId")
+            $multipartContent.Add([System.Net.Http.StringContent]::new("Java"), "SourceCodeLanguage")
+            $multipartContent.Add([System.Net.Http.StringContent]::new("Unit"), "TestType")
+            $multipartContent.Add([System.Net.Http.StringContent]::new("MSTEST,MOQ"), "TestingFrameworks")
+            $multipartContent.Add([System.Net.Http.StringContent]::new("${{ vars.LLM }}"), "Llm")
+            $multipartContent.Add([System.Net.Http.StringContent]::new("Generate only the source code, without any extra information"), "AdditionalInstructions")
+
+            $request = [System.Net.Http.HttpRequestMessage]::new("POST", "http://api.gftaiimpact.local/ai/test")
+            $request.Headers.Authorization = [System.Net.Http.Headers.AuthenticationHeaderValue]::new("Bearer", "$env:access_token")
+            $request.Content = $multipartContent
+
+            $response = $httpClient.SendAsync($request).Result
+            $body = $response.Content.ReadAsStringAsync().Result
+
+            Write-Host "API Response: $body"
+
+            $parsed = $body | ConvertFrom-Json
+            if (-not $parsed.jobId) {
+              Write-Host "❌ jobId not returned. Failing the step."
+              exit 1
+            }
+
+            "job_id=$($parsed.jobId)" | Out-File -FilePath $env:GITHUB_ENV -Append
+
 
       - name: Monitor Job Status
         id: monitor_status
