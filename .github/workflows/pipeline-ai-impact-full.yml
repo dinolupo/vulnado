@@ -120,7 +120,7 @@ jobs:
           $uris = "${{ env.output_uris }}" -split "`n"
           foreach ($uri in $uris) {
             $content = Invoke-RestMethod -Uri "http://api.gftaiimpact.local$uri" -Headers @{ Authorization = "Bearer $env:access_token" }
-            $name = [System.IO.Path]::GetFileNameWithoutExtension($uri)
+            $name = [System.IO.Path]::GetFileNameWithoutExtension([System.IO.Path]::GetFileName($uri))
             $path = "src/test/java/com/scalesec/vulnado/${name}Tests.java"
             New-Item -ItemType Directory -Path (Split-Path $path) -Force | Out-Null
             $content | Out-File $path -Encoding utf8
