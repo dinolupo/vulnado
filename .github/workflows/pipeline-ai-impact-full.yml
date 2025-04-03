@@ -19,6 +19,7 @@ jobs:
 
       - name: Authenticate with Keycloak
         id: keycloak_auth
+        shell: bash
         run: |
           TOKEN_RESPONSE=$(curl -s -X POST 'http://auth.gftaiimpact.local/realms/ai-impact/protocol/openid-connect/token' \
             -H 'Content-Type: application/x-www-form-urlencoded' \
@@ -39,6 +40,7 @@ jobs:
           echo "access_token=$ACCESS_TOKEN" >> $GITHUB_ENV
 
       - name: Checkout the branch
+        shell: bash
         run: |
           BRANCH_NAME=${{ github.event.pull_request.head.ref }}
           git fetch origin $BRANCH_NAME:$BRANCH_NAME
@@ -57,15 +59,16 @@ jobs:
           #   echo "$JAVA_FILES"
           #   echo "EOF"
           # } >> "$GITHUB_ENV"
+        shell: bash
         run: |
-          java_files=$(find "src/main/java/com/scalesec/vulnado" -type f -name "*.java")          
+          java_files=$(find "src/main/java/com/scalesec/vulnado" -type f -name "*.java")
           JAVA_FILES=()
-          
+
           while IFS= read -r FILE; do
             echo "Processing file: $FILE"
             JAVA_FILES+=("$FILE")
           done <<< "$java_files"
-          
+
           echo "JAVA_FILES: ${JAVA_FILES[@]}"
           {
             echo "java_files<<EOF"
@@ -75,6 +78,7 @@ jobs:
 
       - name: Prepare and Send to API (TestCreator)
         id: send_api
+        shell: bash
         run: |
           FILES_ARRAY=()
           while IFS= read -r FILE; do
@@ -106,6 +110,7 @@ jobs:
 
       - name: Monitor Job Status
         id: monitor_status
+        shell: bash
         run: |
           JOB_ID=${{ env.job_id }}
           STATUS="Pending"
@@ -128,15 +133,16 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Save Generated Tests
+        shell: bash
         run: |
           OUTPUT_URIS="${{ env.output_uris }}"
 
           while IFS= read -r uri; do
-            FILE_URL="http://api.gftaiimpact.local${uri}" 
+            FILE_URL="http://api.gftaiimpact.local${uri}"
             FILE_CONTENT=$(curl --location "$FILE_URL" --header "Authorization: Bearer ${{ env.access_token }}")
             CLASS_NAME=$(basename "$uri" .java)
             TEST_FILE="src/test/java/com/scalesec/vulnado/${CLASS_NAME}Tests.java"
-          
+
             mkdir -p "$(dirname "$TEST_FILE")"
             echo "$FILE_CONTENT" > "$TEST_FILE"
           done <<< "$OUTPUT_URIS"
@@ -154,6 +160,7 @@ jobs:
 
       - name: Prepare and Send to API (DocCreator)
         id: send_api2
+        shell: bash
         run: |
 
           FILES_ARRAY=()
@@ -174,13 +181,14 @@ jobs:
             --form "PromptId=DocCreator__DocumentCode_V3" \
             --form "TargetExtension=md" \
             --form "Llm=${{ vars.LLM }}" \
-            --form "AdditionalInstructions=Generate all answers in ${{ vars.LANGUAGE }} and If the code have vulnerabilities, describe all in a new # vulnerabilities section")           
+            --form "AdditionalInstructions=Generate all answers in ${{ vars.LANGUAGE }} and If the code have vulnerabilities, describe all in a new # vulnerabilities section")
           echo "API Response: $RESPONSE"
           JOB_ID=$(echo $RESPONSE)
           echo "job_id=$JOB_ID" >> $GITHUB_ENV
 
       - name: Monitor Job Status
         id: monitor_status2
+        shell: bash
         run: |
           JOB_ID=${{ env.job_id }}
           STATUS="Pending"
@@ -203,16 +211,17 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Save Generated Docs
+        shell: bash
         run: |
 
           OUTPUT_URIS="${{ env.output_uris }}"
 
           while IFS= read -r uri; do
-            FILE_URL="http://api.gftaiimpact.local${uri}" 
+            FILE_URL="http://api.gftaiimpact.local${uri}"
             FILE_CONTENT=$(curl --location "$FILE_URL" --header "Authorization: Bearer ${{ env.access_token }}")
             CLASS_NAME=$(basename "$uri" | sed 's/\.java\.md$//')
             DOC_FILE="wiki/src/main/java/com/scalesec/vulnado/${CLASS_NAME}Docs.md"
-          
+
             mkdir -p "$(dirname "$DOC_FILE")"
             echo "$FILE_CONTENT" > "$DOC_FILE"
           done <<< "$OUTPUT_URIS"
@@ -228,6 +237,7 @@ jobs:
 #               https://api.github.com/repos/$REPO/issues/$ISSUE_NUMBER/comments
 
       - name: Commit and Push Documenter and Tests
+        shell: bash
         run: |
           git config --global user.name 'gft-ai-impact[bot]'
           git config --global user.email 'ai-impact[bot]@gft.com'
@@ -254,6 +264,7 @@ jobs:
           #            --form 'PullRequestId="${{ github.event.pull_request.number }}"' \
       - name: Prepare and Send for Code Review
         id: send_code_review
+        shell: bash
         run: |
           echo "Repositório: ${{github.repository}}"
           RESPONSE=$(curl --location 'http://api.gftaiimpact.local/ai/review' \
@@ -265,13 +276,14 @@ jobs:
             --form 'PullRequestId="${{ steps.create-pr.outputs.pull-request-number }}"' \
             --form 'RepoName="${{github.repository}}"' \
             --form 'AdditionalInstructions=""' \
-            --form 'Conventions="Header,Description,Summary,Recomendations,VulnExplanation"') 
+            --form 'Conventions="Header,Description,Summary,Recomendations,VulnExplanation"')
           echo "API Response: $RESPONSE"
           JOB_ID=$(echo $RESPONSE)
           echo "job_id=$JOB_ID" >> $GITHUB_ENV
 
       - name: Monitor Code Review Job Status
         id: monitor_code_review_status
+        shell: bash
         run: |
           JOB_ID=${{ env.job_id }}
           STATUS="Pending"
@@ -295,6 +307,7 @@ jobs:
 
       - name: Prepare and Send for Code Fix
         id: monitor_code_fix_status
+        shell: bash
         run: |
 
           RESPONSE=$(curl --location 'http://api.gftaiimpact.local/ai/fix' \
@@ -332,6 +345,7 @@ jobs:
 
       - name: Monitor Fixer Job Status
         id: monitor_status3
+        shell: bash
         run: |
           JOB_ID=${{ env.job_id }}
           STATUS="Pending"
