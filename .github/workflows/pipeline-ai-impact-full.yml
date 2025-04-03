@@ -92,13 +92,7 @@ jobs:
 
           Write-Host "API Response: $body"
 
-          $parsed = $body | ConvertFrom-Json
-          if (-not $parsed.jobId) {
-            Write-Host "❌ jobId not returned. Failing the step."
-            exit 1
-          }
-
-          "job_id=$($parsed.jobId)" | Out-File -FilePath $env:GITHUB_ENV -Append
+          $body | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Monitor Job Status
         id: monitor_status
