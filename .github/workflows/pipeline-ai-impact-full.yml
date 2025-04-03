@@ -80,6 +80,8 @@ jobs:
               }
           }
 
+          Write-Host "Checking job status at URL: http://api.gftaiimpact.local/ai/jobs/$jobId/status"
+
           $response = Invoke-RestMethod -Uri "http://api.gftaiimpact.local/ai/test" -Method Post -Headers @{ "Authorization" = "Bearer $env:access_token" } -Body @{
               RunName             = "GenerateTests"
               jobName             = "DemoTestCreator"
@@ -93,7 +95,14 @@ jobs:
               AdditionalInstructions = "Generate only the source code, without any extra information"
           }
 
-          Write-Host "API Response: $response"
+          # Write-Host "API Response: $response"
+          Write-Host "Response from /ai/test:"
+          Write-Host ($response | ConvertTo-Json -Depth 10)
+
+          if (-not $response.jobId) {
+              Write-Host "jobId not found in response!"
+              exit 1
+          }
 
           $jobId = $response.jobId
           Add-Content -Path $env:GITHUB_ENV -Value "job_id=$jobId"
